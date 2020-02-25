@@ -1,5 +1,6 @@
 {
     "appid": "8650fa8a-fdb1-4563-9aad-53d8b6cfab6b",
+    "connector_id": "8650fa8a-fdb1-4563-9aad-53d8b6cfab6b",
     "product_version_regex": ".*",
     "description": "This app supports various identity management actions on Okta",
     "package_name": "phantom_okta",
@@ -14,6 +15,7 @@
     "product_name": "Okta",
     "app_wizard_version": "1.0.0",
     "app_version": "2.0.0",
+    "connector_version": "2.0.1",
     "python_version": "3",
     "latest_tested_versions": [
         "Cloud tested 2-24-2020"
