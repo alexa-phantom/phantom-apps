@@ -6,9 +6,9 @@
     "publisher": "Splunk",
     "type": "ticketing",
     "main_module": "jira_connector.py",
-    "app_version": "2.0.37",
-    "connector_version": "2.0.36",
-    "utctime_updated": "2020-02-20T01:02:03.000000Z",
+    "app_version": "2.0.46",
+    "connector_version": "2.0.46",
+    "utctime_updated": "2020-05-06T21:46:40.000000Z",
     "package_name": "phantom_jira",
     "product_vendor": "Atlassian",
     "product_name": "Jira",
@@ -20,7 +20,7 @@
     "python_version": "3",
     "logo": "logo_atlassian.svg",
     "logo_dark": "logo_atlassian_dark.svg",
-    "license": "Copyright (c) 2016-2019 Splunk Inc.",
+    "license": "Copyright (c) 2016-2020 Splunk Inc.",
     "pip_dependencies": {
         "wheel": [
             {
@@ -42,10 +42,6 @@
             {
                 "module": "defusedxml",
                 "input_file": "wheels/defusedxml-0.6.0-py2.py3-none-any.whl"
-            },
-            {
-                "module": "enum34",
-                "input_file": "wheels/enum34-1.1.6-py3-none-any.whl"
             },
             {
                 "module": "idna",

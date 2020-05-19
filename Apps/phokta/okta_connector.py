@@ -537,9 +537,9 @@ class OktaConnector(BaseConnector):
 
         # Add a dictionary that is made up of the most important values from data into the summary
         summary = action_result.update_summary({})
-        summary['group_id'] = response.json().get('id')
+        summary['group_id'] = response.get('id')
 
-        # Return success, no need to set the message, only the status
+        # Returns success, no need to set the message, only the status
         # BaseConnector will create a textual message based off of the summary dictionary
         return action_result.set_status(status_strings.APP_SUCCESS, OKTA_ADDED_GROUP_SUCCESS_MSG)
 
@@ -675,7 +675,7 @@ class OktaConnector(BaseConnector):
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         user_id = param['email']
-        factor_type = param.get('factortype', 'push')
+        factor_type = 'push'
 
         # get user
         ret_val, response_user = self._make_rest_call('/users/{}'.format(user_id), action_result, method='get')
@@ -691,6 +691,7 @@ class OktaConnector(BaseConnector):
             return action_result.get_status()
 
         # process factors
+        factor_link_verify_uri = None
         for factor in response_factor:
             factor_link_verify_href = factor.get('_links', {}).get('verify', {}).get('href', {})
             if factor_type in factor['factorType'] and len(factor_link_verify_href) > 0:
@@ -698,6 +699,7 @@ class OktaConnector(BaseConnector):
                 factor_link_verify_uri = factor_link_verify_href.split('v1')[1]
         if not factor_link_verify_uri:
             self.save_progress("[-] error retriving factor_type: " + factor_type)
+            return action_result.set_status(status_strings.APP_ERROR, OKTA_INVALID_FACTOR_LINK_MSG)
 
         # call verify
         ret_val, response_verify = self._make_rest_call(factor_link_verify_uri, action_result, method='post')

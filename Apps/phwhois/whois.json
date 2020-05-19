@@ -2,14 +2,14 @@
     "appid": "e6723c2e-06ef-415a-8098-62c46c1cb71f",
     "connector_id": "e6723c2e-06ef-415a-8098-62c46c1cb71f",
     "name": "WHOIS",
-    "description": "This app implements investigative actions that query the whois database",
+    "description": "This app implements investigative actions that query the WHOIS database",
     "package_name": "phantom_whois",
     "publisher": "Splunk",
     "type": "information",
     "main_module": "whois_connector.py",
-    "app_version": "2.0.5",
-    "connector_version": "2.0.5",
-    "utctime_updated": "2020-02-21T19:52:37.000000Z",
+    "app_version": "2.0.8",
+    "connector_version": "2.0.8",
+    "utctime_updated": "2020-04-14T00:42:15.000000Z",
     "product_vendor": "Generic",
     "product_name": "Whois",
     "product_version_regex": ".*",
@@ -52,8 +52,7 @@
             }
         ]
     },
-    "configuration": {},
-    "app_config": {
+    "configuration": {
         "update_days": {
             "data_type": "numeric",
             "order": 0,

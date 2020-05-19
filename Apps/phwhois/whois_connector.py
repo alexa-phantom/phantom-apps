@@ -10,11 +10,13 @@ try:
     from phantom.action_result import ActionResult
     from phantom import status as status_strings
     from phantom import json_keys
+    from phantom import utils
 except:
     from base_connector import BaseConnector
     from action_result import ActionResult
     import status as status_strings
     import json_keys
+    import utils
 
 
 # THIS Connector imports
@@ -58,6 +60,8 @@ class WhoisConnector(BaseConnector):
 
     def initialize(self):
         self._state = self.load_state()
+        config = self.get_config()
+        self._update_days = int(config['update_days'])
         return status_strings.APP_SUCCESS
 
     def finalize(self):
@@ -69,7 +73,7 @@ class WhoisConnector(BaseConnector):
         contacts = response['contacts']
 
         # First check if the raw data contains any info
-        raw_response = phantom.get_value(response, 'raw')
+        raw_response = utils.get_value(response, 'raw')
         if (raw_response):
             for line in raw_response:
                 if (line.lower().find('domain not found') != -1):
@@ -188,7 +192,7 @@ class WhoisConnector(BaseConnector):
 
         time_diff = current_time - last_time
 
-        app_config = self.get_app_config()
+        app_config = self.get_config()
         cache_exp_days = int(app_config[WHOIS_JSON_CACHE_EXP_DAYS])
 
         if (time_diff.days >= cache_exp_days):

@@ -2,7 +2,7 @@
     "appid": "d86b47a3-cba1-419a-8e35-09c27c0f7b0c",
     "connector_id": "d86b47a3-cba1-419a-8e35-09c27c0f7b0c",
     "name": "AWS IAM",
-    "description": "This app integrates with Amazon Web Services Identity Access Management (AWS IAM) to support various containment, corrective and investigate actions",
+    "description": "This app integrates with Amazon Web Services Identity Access Management (AWS IAM) to support various containment, corrective and investigative actions",
     "type": "identity management",
     "product_vendor": "AWS",
     "logo": "logo_aws.svg",
@@ -11,9 +11,9 @@
     "product_version_regex": ".*",
     "publisher": "Splunk",
     "license": "Copyright (c) 2018-2020 Splunk Inc.",
-    "app_version": "2.0.0",
-    "connector_version": "2.0.0",
-    "utctime_updated": "2020-02-26T19:39:40.000000Z",
+    "app_version": "2.0.3",
+    "connector_version": "2.0.3",
+    "utctime_updated": "2020-04-14T00:22:18.000000Z",
     "package_name": "phantom_awsiam",
     "python_version": "3",
     "main_module": "awsiam_connector.py",
@@ -32,13 +32,13 @@
     },
     "configuration": {
         "access_key": {
-            "description": "Access key ID",
+            "description": "Access Key ID",
             "data_type": "password",
             "required": true,
             "order": 0
         },
         "secret_key": {
-            "description": "Secret access key",
+            "description": "Secret Access key",
             "data_type": "password",
             "required": true,
             "order": 1
@@ -259,7 +259,7 @@
                     "data_path": "action_result.data.*.GroupId",
                     "data_type": "string",
                     "example_values": [
-                        "ABCDEFGHI1234567890"
+                        "ABCDEFGH1234567890"
                     ],
                     "column_name": "Group ID",
                     "column_order": 0

@@ -33,7 +33,7 @@ import time
 import signal
 import requests
 import tempfile
-from datetime import *
+from datetime import datetime
 from jira.client import JIRA
 from bs4 import BeautifulSoup
 
@@ -130,7 +130,7 @@ class JiraConnector(BaseConnector):
 
         # Try to parse the HTML content of the error in majority situations and if it fails to parse
         # the error response as HTML, then, return the raw error text to ensure that the error text
-        # is not getting dropped from this point
+        # is not getting dropped from this point.
         try:
             soup = BeautifulSoup(str(error_text), "html.parser")
             error_text = soup.text
@@ -996,7 +996,12 @@ class JiraConnector(BaseConnector):
 
     def _get_container_id(self, issue_key):
 
-        url = '{0}rest/container?_filter_source_data_identifier="{1}"&_filter_asset={2}'.format(self.get_phantom_base_url(), issue_key, self.get_asset_id())
+        url = ""
+        if hasattr(self, 'get_phantom_base_url'):
+            url = '{0}rest/container?_filter_source_data_identifier="{1}"&_filter_asset={2}'.format(self.get_phantom_base_url(), issue_key, self.get_asset_id())
+        else:
+            # Setting earliest to '0' to make sure we search all tickets
+            url = '{0}/notable?source_data_identifier={1}&ingest_asset={2}&earliest=0'.format(self.get_ims_base_url(), issue_key, self.get_asset_id())
 
         try:
             r = requests.get(url, verify=False)
@@ -1005,12 +1010,12 @@ class JiraConnector(BaseConnector):
             self.debug_print("Unable to query JIRA ticket container: ", e)
             return None
 
-        if (resp_json.get('count', 0) <= 0):
+        if (resp_json.get('count', resp_json.get('total', 0)) <= 0):
             self.debug_print("No container matched")
             return None
 
         try:
-            container_id = resp_json.get('data', [])[0]['id']
+            container_id = resp_json.get('data', resp_json.get('items', []))[0]['id']
         except Exception as e:
             self.debug_print("Container results are not proper: ", e)
             return None
@@ -1019,8 +1024,13 @@ class JiraConnector(BaseConnector):
 
     def _get_artifact_id(self, sdi, container_id, issue_type="issue", full_artifact=False):
 
-        url = '{0}rest/artifact?_filter_source_data_identifier="{1}"&_filter_container_id={2}&_filter_label="{3}"&sort=id&order=desc'.format(
+        if hasattr(self, 'get_phantom_base_url'):
+            url = '{0}rest/artifact?_filter_source_data_identifier="{1}"&_filter_container_id={2}&_filter_label="{3}"&sort=id&order=desc'.format(
                         self.get_phantom_base_url(), sdi, container_id, issue_type.lower())
+        else:
+            url = '{0}/event?source_data_identifier={1}&notable_id={2}'.format(self.get_ims_base_url(),
+                                                                                                      sdi,
+                                                                                                      container_id)
 
         try:
             r = requests.get(url, verify=False)
@@ -1029,16 +1039,18 @@ class JiraConnector(BaseConnector):
             self.debug_print("Unable to query JIRA artifact: ", e)
             return None
 
-        if (resp_json.get('count', 0) <= 0):
+        if (resp_json.get('count', resp_json.get('total', 0)) <= 0):
             self.debug_print("No artifact matched")
             return None
 
         try:
             if full_artifact:
-                previous_artifacts_list = resp_json.get('data', [])
+                previous_artifacts_list = resp_json.get('data',
+                                                        resp_json.get('items',
+                                                                      []))
                 return previous_artifacts_list[0]
             else:
-                return resp_json.get('data', [])[0]['id']
+                return resp_json.get('data', resp_json.get('items', []))[0]['id']
         except Exception as e:
             self.debug_print("Artifact results are not proper: ", e)
             return None
@@ -1236,7 +1248,11 @@ class JiraConnector(BaseConnector):
         artifact_cef['created'] = attachment.created
         artifact_cef['filename'] = attachment.filename
         artifact_cef['mimeType'] = attachment.mimeType
-        artifact_cef['author'] = attachment.author.name
+        try:
+            artifact_cef['author'] = attachment.author.name
+        except:
+            artifact_cef['author'] = attachment.author.displayName
+
         artifact_cef['vault_id'] = vault_ret[json_keys.APP_JSON_HASH]
 
         artifact_json['cef'] = artifact_cef
@@ -1250,7 +1266,11 @@ class JiraConnector(BaseConnector):
         try:
             artifact_json = {}
 
-            artifact_json['name'] = '{0} by {1}'.format(base_name, comment.author.name)
+            try:
+                artifact_json['name'] = '{0} by {1}'.format(base_name, comment.author.name)
+            except:
+                artifact_json['name'] = '{0} by {1}'.format(base_name,
+                                                            comment.author.displayName)
             artifact_json['label'] = 'comment'
             artifact_json['container_id'] = container_id
             artifact_json['source_data_identifier'] = comment.id
@@ -1260,9 +1280,15 @@ class JiraConnector(BaseConnector):
             artifact_cef['body'] = comment.body
             artifact_cef['created'] = comment.created
             artifact_cef['updated'] = comment.updated
-            artifact_cef['author'] = comment.author.name
-            artifact_cef['updateAuthor'] = comment.updateAuthor.name
+            try:
+                artifact_cef['author'] = comment.author.name
+            except:
+                artifact_json['author'] = comment.author.displayName
 
+            try:
+                artifact_cef['updateAuthor'] = comment.updateAuthor.name
+            except:
+                artifact_cef['updateAuthor'] = comment.updateAuthor.displayName
             artifact_json['cef'] = artifact_cef
 
             artifact_list.append(artifact_json)
@@ -1481,17 +1507,48 @@ class JiraConnector(BaseConnector):
             issue_details.append(None)
 
         artifact_details = []
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CONTAINER))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_SDI))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_LABEL))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_PRIORITY))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_RESOLUTTION))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_STATUS))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_REPORTER))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_PROJECT_KEY))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_SUMMARY))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_DESCRIPTION))
-        artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_ISSUE_TYPE))
+        if not 'notable_id' in previous_full_artifact:
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CONTAINER))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_SDI))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_LABEL))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_PRIORITY))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_RESOLUTTION))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_STATUS))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_REPORTER))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_PROJECT_KEY))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_SUMMARY))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_DESCRIPTION))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(JIRA_JSON_ISSUE_TYPE))
+        else:
+            artifact_details.append(previous_full_artifact.get('notable_id'))
+            artifact_details.append(previous_full_artifact.get(JIRA_JSON_SDI))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_ISSUE_TYPE,
+                                                                      {}).get('value').lower())
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_PRIORITY,
+                                                                      {}).get('value'))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_RESOLUTTION,
+                                                                      {}).get('value'))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_STATUS,
+                                                                      {}).get('value'))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_REPORTER,
+                                                                      {}).get('value'))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_PROJECT_KEY,
+                                                                      {}).get('value'))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_SUMMARY,
+                                                                      {}).get('value'))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_DESCRIPTION,
+                                                                      {}).get('value'))
+            artifact_details.append(previous_full_artifact.get('artifacts',
+                                                               {}).get(JIRA_JSON_ISSUE_TYPE,
+                                                                      {}).get('value'))
 
         config = self.get_config()
         custom_fields = config.get(JIRA_JSON_CUSTOM_FIELDS)
@@ -1508,21 +1565,29 @@ class JiraConnector(BaseConnector):
 
             for custom_field in custom_fields_list:
                 issue_details.append(custom_fields_by_name.get(custom_field))
-                artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(custom_field))
+                if not 'notable_id' in previous_full_artifact:
+                    artifact_details.append(previous_full_artifact.get(JIRA_JSON_CEF, {}).get(custom_field))
+                else:
+                    artifact_details.append(previous_full_artifact.get('artifacts',
+                                                                       {}).get(custom_field,
+                                                                              {}).get('value'))
 
         if issue_details == artifact_details:
             return False
         else:
             return True
 
-    def _update_container(self, issue, container_id, last_time, action_result):
+    def _update_container(self, issue, container_id, last_time, last_updated_time, action_result):
 
         update_json = {}
         update_json['data'] = issue.raw
         update_json['description'] = issue.fields.summary
 
-        url = '{0}rest/container/{1}'.format(self.get_phantom_base_url(), container_id)
-
+        if hasattr(self, 'get_phantom_base_url'):
+            url = '{0}rest/container/{1}'.format(self.get_phantom_base_url(), container_id)
+        else:
+            url = '{0}/notable/{1}'.format(self.get_ims_base_url(),
+                                           container_id)
         try:
             r = requests.post(url, data=json.dumps(update_json), verify=False)
             resp_json = r.json()
@@ -1565,7 +1630,8 @@ class JiraConnector(BaseConnector):
                 update_datetime = datetime.strptime(update_time, "%Y-%m-%dT%H:%M:%S.%f")
                 update_epoch = (update_datetime - datetime.utcfromtimestamp(0)).total_seconds()
 
-                if self.is_poll_now() or (update_epoch > last_time):
+                # if self.is_poll_now() or (update_epoch > last_time):
+                if self.is_poll_now() or (update_epoch > last_updated_time):
                     ret_val = self._handle_comment(comment, container_id, '{0}_{1}'.format('comment', comment.updated), artifact_list, action_result)
 
                     if status.is_fail(ret_val):
@@ -1609,13 +1675,14 @@ class JiraConnector(BaseConnector):
 
         return status.APP_SUCCESS
 
-    def _save_issue(self, issue, last_time, action_result):
+    def _save_issue(self, issue, last_time, last_updated_time, action_result):
 
         container_id = self._get_container_id(issue.key)
 
         if container_id:
             # Ticket has already been ingested. Need to update its container.
-            ret_val = self._update_container(issue, container_id, last_time, action_result)
+            ret_val = self._update_container(issue, container_id, last_time,
+                                             last_updated_time, action_result)
 
             if status.is_fail(ret_val):
                 return status.APP_ERROR
@@ -1628,7 +1695,14 @@ class JiraConnector(BaseConnector):
         container_json['data'] = issue.raw
         container_json['description'] = issue.fields.summary
         container_json['source_data_identifier'] = issue.key
-        container_json['label'] = self.get_config().get('ingest', {}).get('container_label')
+        config = self.get_config()
+
+        if 'ingest' in config:
+            container_json['label'] = config['ingest'].get('container_label', config['ingest'].get('notable_label', 'Unknown'))
+        else:
+            container_json['label'] = 'Unknown'
+
+        container_json['ingest_asset'] = self.get_asset_id()
 
         # Save the container
         ret_val, message, container_id = self.save_container(container_json)
@@ -1701,6 +1775,7 @@ class JiraConnector(BaseConnector):
 
         # Get time from last poll, save now as time for this poll
         last_time = state.get('last_time', 0)
+        last_updated_time = last_time
 
         if last_time:
             try:
@@ -1755,12 +1830,14 @@ class JiraConnector(BaseConnector):
         # Ingest the issues
         failed = 0
         for issue in issues:
-            if (not self._save_issue(self._jira.issue(issue.key), last_time, action_result)):
+            if (not self._save_issue(self._jira.issue(issue.key), last_time,
+                                     last_updated_time, action_result)):
                 failed += 1
 
         if not self.is_poll_now() and issues:
             last_fetched_issue = self._jira.issue(issues[-1].key)
-            last_fetched_issue_updated_timestamp = time.mktime(datetime.strptime(last_fetched_issue.fields.updated[:-5], "%Y-%m-%dT%H:%M:%S.%f").timetuple())
+            # last_fetched_issue_updated_timestamp = time.mktime(datetime.strptime(last_fetched_issue.fields.updated[:-5], "%Y-%m-%dT%H:%M:%S.%f").timetuple())
+            last_fetched_issue_updated_timestamp = (datetime.strptime(last_fetched_issue.fields.updated[:-5], "%Y-%m-%dT%H:%M:%S.%f") - datetime.utcfromtimestamp(0)).total_seconds()
             state['last_time'] = last_fetched_issue_updated_timestamp
 
         # Check for save_state API, use it if it is present
